@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IISER Tech Connect</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5;
+        }
+        .scroll-container {
+            max-height: calc(100vh - 200px);
+            overflow-y: auto;
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .scroll-container::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, collection, query, onSnapshot, addDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let app, db, auth;
+        try {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            console.log("Firebase initialized successfully.");
+        } catch (error) {
+            console.error("Error initializing Firebase:", error);
+            if (Object.keys(firebaseConfig).length === 0) {
+                console.warn("Firebase config not found. Running without full Firebase functionality. Please provide __firebase_config and __app_id.");
+            }
+        }
+
+        window.firebaseApp = app;
+        window.firebaseDb = db;
+        window.firebaseAuth = auth;
+        window.firebaseAppId = appId;
+        window.firebaseInitialAuthToken = initialAuthToken;
+        window.firebaseSignInAnonymously = signInAnonymously;
+        window.firebaseSignInWithCustomToken = signInWithCustomToken;
+        window.firebaseOnAuthStateChanged = onAuthStateChanged;
+        window.firebaseSignOut = signOut;
+        window.firebaseCreateUserWithEmailAndPassword = createUserWithEmailAndPassword;
+        window.firebaseSignInWithEmailAndPassword = signInWithEmailAndPassword;
+        window.firebaseDoc = doc;
+        window.firebaseGetDoc = getDoc;
+        window.firebaseSetDoc = setDoc;
+        window.firebaseCollection = collection;
+        window.firebaseQuery = query;
+        window.firebaseOnSnapshot = onSnapshot;
+        window.firebaseAddDoc = addDoc;
+        window.firebaseUpdateDoc = updateDoc;
+        window.firebaseDeleteDoc = deleteDoc;
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback } = React;
+        const { createRoot } = ReactDOM;
+
+        const MessageBox = ({ message, type, onClose }) => {
+            if (!message) return null;
+
+            let bgColor = '';
+            let borderColor = '';
+            let textColor = '';
+
+            switch (type) {
+                case 'success':
+                    bgColor = 'bg-green-100';
+                    borderColor = 'border-green-400';
+                    textColor = 'text-green-700';
+                    break;
+                case 'error':
+                    bgColor = 'bg-red-100';
+                    borderColor = 'border-red-400';
+                    textColor = 'text-red-700';
+                    break;
+                case 'info':
+                default:
+                    bgColor = 'bg-blue-100';
+                    borderColor = 'border-blue-400';
+                    textColor = 'text-blue-700';
+                    break;
+            }
+
+            return (
+                <div className={`fixed top-4 right-4 p-4 rounded-lg shadow-lg border ${bgColor} ${borderColor} ${textColor} z-50`}>
+                    <div className="flex justify-between items-center">
+                        <span>{message}</span>
+                        <button onClick={onClose} className="ml-4 text-lg font-bold">
+                            &times;
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        function App() {
+            const [currentPage, setCurrentPage] = useState('login');
+            const [user, setUser] = useState(null);
+            const [userId, setUserId] = useState(null);
+            const [isAuthReady, setIsAuthReady] = useState(false);
+            const [loading, setLoading] = useState(true);
+            const [message, setMessage] = useState('');
+            const [messageType, setMessageType] = useState('info');
+
+            const db = window.firebaseDb;
+            const auth = window.firebaseAuth;
+            const appId = window.firebaseAppId;
+            const initialAuthToken = window.firebaseInitialAuthToken;
+
+            const showMessage = (msg, type = 'info') => {
+                setMessage(msg);
+                setMessageType(type);
+                setTimeout(() => setMessage(''), 5000);
+            };
+
+            useEffect(() => {
+                if (!auth) {
+                    console.error("Firebase Auth not available.");
+                    setLoading(false);
+                    setIsAuthReady(true);
+                    return;
+                }
+
+                const unsubscribe = window.firebaseOnAuthStateChanged(auth, async (currentUser) => {
+                    if (currentUser) {
+                        setUser(currentUser);
+                        setUserId(currentUser.uid);
+                        setCurrentPage('profile');
+                        showMessage(`Welcome, ${currentUser.email || 'User'}!`, 'success');
+                    } else {
+                        setUser(null);
+                        setUserId(null);
+                        setCurrentPage('login');
+                    }
+                    setLoading(false);
+                    setIsAuthReady(true);
+                });
+
+                const signIn = async () => {
+                    if (auth && !auth.currentUser) {
+                        try {
+                            if (initialAuthToken) {
+                                await window.firebaseSignInWithCustomToken(auth, initialAuthToken);
+                                console.log("Signed in with custom token.");
+                            } else {
+                                await window.firebaseSignInAnonymously(auth);
+                                console.log("Signed in anonymously.");
+                            }
+                        } catch (error) {
+                            console.error("Error during initial sign-in:", error);
+                            showMessage(`Authentication failed: ${error.message}`, 'error');
+                        }
+                    }
+                };
+
+                if (!isAuthReady) {
+                    signIn();
+                }
+
+                return () => unsubscribe();
+            }, [auth, initialAuthToken, isAuthReady]);
+
+            const handleLogin = async (email, password) => {
+                setLoading(true);
+                try {
+                    await window.firebaseSignInWithEmailAndPassword(auth, email, password);
+                    showMessage('Logged in successfully!', 'success');
+                } catch (error) {
+                    console.error("Login error:", error);
+                    showMessage(`Login failed: ${error.message}`, 'error');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleRegister = async (email, password) => {
+                setLoading(true);
+                try {
+                    const userCredential = await window.firebaseCreateUserWithEmailAndPassword(auth, email, password);
+                    const newUser = userCredential.user;
+                    await window.firebaseSetDoc(window.firebaseDoc(db, `artifacts/${appId}/users/${newUser.uid}/profile/data`), {
+                        email: newUser.email,
+                        name: '',
+                        bio: '',
+                        interests: [],
+                        isMentor: false,
+                        techLeadRole: '',
+                        contact: ''
+                    });
+                    showMessage('Registration successful! Profile created.', 'success');
+                } catch (error) {
+                    console.error("Registration error:", error);
+                    showMessage(`Registration failed: ${error.message}`, 'error');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleLogout = async () => {
+                setLoading(true);
+                try {
+                    await window.firebaseSignOut(auth);
+                    showMessage('Logged out successfully!', 'info');
+                } catch (error) {
+                    console.error("Logout error:", error);
+                    showMessage(`Logout failed: ${error.message}`, 'error');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            if (loading && !isAuthReady) {
+                return (
+                    <div className="flex items-center justify-center min-h-screen bg-gray-100">
+                        <div className="text-xl font-semibold text-gray-700">Loading App...</div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen flex flex-col">
+                    <MessageBox message={message} type={messageType} onClose={() => setMessage('')} />
+                    <nav className="bg-gradient-to-r from-blue-600 to-purple-700 p-4 shadow-md">
+                        <div className="container mx-auto flex justify-between items-center">
+                            <h1 className="text-2xl font-bold text-white">IISER Tech Connect</h1>
+                            <div className="flex space-x-4">
+                                {user ? (
+                                    <>
+                                        <button onClick={() => setCurrentPage('profile')} className="text-white hover:text-blue-200 transition duration-300">Profile</button>
+                                        <button onClick={() => setCurrentPage('projects')} className="text-white hover:text-blue-200 transition duration-300">Projects</button>
+                                        <button onClick={() => setCurrentPage('mentors')} className="text-white hover:text-blue-200 transition duration-300">Mentors</button>
+                                        <button onClick={() => setCurrentPage('events')} className="text-white hover:text-blue-200 transition duration-300">Events</button>
+                                        <button onClick={handleLogout} className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg shadow-md transition duration-300">Logout</button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <button onClick={() => setCurrentPage('login')} className="text-white hover:text-blue-200 transition duration-300">Login</button>
+                                        <button onClick={() => setCurrentPage('register')} className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg shadow-md transition duration-300">Register</button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </nav>
+
+                    <main className="flex-grow container mx-auto p-6 bg-white rounded-lg shadow-lg my-6">
+                        {currentPage === 'login' && <LoginPage onLogin={handleLogin} onRegisterClick={() => setCurrentPage('register')} />}
+                        {currentPage === 'register' && <RegisterPage onRegister={handleRegister} onLoginClick={() => setCurrentPage('login')} />}
+                        {user && currentPage === 'profile' && <ProfilePage userId={userId} db={db} appId={appId} showMessage={showMessage} />}
+                        {user && currentPage === 'projects' && <ProjectsPage userId={userId} db={db} appId={appId} showMessage={showMessage} />}
+                        {user && currentPage === 'mentors' && <MentorsPage userId={userId} db={db} appId={appId} showMessage={showMessage} />}
+                        {user && currentPage === 'events' && <EventsPage userId={userId} db={db} appId={appId} showMessage={showMessage} />}
+                    </main>
+
+                    <footer className="bg-gray-800 text-white p-4 text-center mt-auto">
+                        <p>&copy; 2025 IISER Tech Connect. All rights reserved. User ID: {userId || 'Not logged in'}</p>
+                    </footer>
+                </div>
+            );
+        }
+
+        const LoginPage = ({ onLogin, onRegisterClick }) => {
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onLogin(email, password);
+            };
+
+            return (
+                <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-xl">
+                    <h2 className="text-3xl font-bold text-gray-800 mb-6 text-center">Login</h2>
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <div>
+                            <label className="block text-gray-700 text-sm font-semibold mb-2" htmlFor="email">Email:</label>
+                            <input
+                                type="email"
+                                id="email"
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-gray-700 text-sm font-semibold mb-2" htmlFor="password">Password:</label>
+                            <input
+                                type="password"
+                                id="password"
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                required
+                            />
+                        </div>
+                        <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-md">
+                            Login
+                        </button>
+                    </form>
+                    <p className="mt-6 text-center text-gray-600">
+                        Don't have an account? <button onClick={onRegisterClick} className="text-blue-600 hover:underline font-semibold">Register here</button>
+                    </p>
+                </div>
+            );
+        };
+
+        const RegisterPage = ({ onRegister, onLoginClick }) => {
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onRegister(email, password);
+            };
+
+            return (
+                <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-xl">
+                    <h2 className="text-3xl font-bold text-gray-800 mb-6 text-center">Register</h2>
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <div>
+                            <label className="block text-gray-700 text-sm font-semibold mb-2" htmlFor="reg-email">Email:</label>
+                            <input
+                                type="email"
+                                id="reg-email"
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-gray-700 text-sm font-semibold mb-2" htmlFor="reg-password">Password:</label>
+                            <input
+                                type="password"
+                                id="reg-password"
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                required
+                            />
+                        </div>
+                        <button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-md">
+                            Register
+                        </button>
+                    </form>
+                    <p className="mt-6 text-center text-gray-600">
+                        Already have an account? <button onClick={onLoginClick} className="text-green-600 hover:underline font-semibold">Login here</button>
+                    </p>
+                </div>
+            );
+        };
+
+        const ProfilePage = ({ userId, db, appId, showMessage }) => {
+            const [profile, setProfile] = useState(null);
+            const [editing, setEditing] = useState(false);
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                if (!userId || !db) {
+                    setLoading(false);
+                    return;
+                }
+
+                const profileDocRef = window.firebaseDoc(db, `artifacts/${appId}/users/${userId}/profile/data`);
+                const unsubscribe = window.firebaseOnSnapshot(profileDocRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        setProfile(docSnap.data());
+                    } else {
+                        window.firebaseSetDoc(profileDocRef, {
+                            email: window.firebaseAuth.currentUser?.email || '',
+                            name: '',
+                            bio: '',
+                            interests: [],
+                            isMentor: false,
+                            techLeadRole: '',
+                            contact: ''
+                        }).then(() => {
+                            setProfile({
+                                email: window.firebaseAuth.currentUser?.email || '',
+                                name: '',
+                                bio: '',
+                                interests: [],
+                                isMentor: false,
+                                techLeadRole: '',
+                                contact: ''
+                            });
+                            showMessage('Your profile has been initialized. Please fill in your details!', 'info');
+                        }).catch(error => {
+                            console.error("Error creating profile:", error);
+                            showMessage(`Error initializing profile: ${error.message}`, 'error');
+                        });
+                    }
+                    setLoading(false);
+                }, (error) => {
+                    console.error("Error fetching profile:", error);
+                    showMessage(`Error loading profile: ${error.message}`, 'error');
+                    setLoading(false);
+                });
+
+                return () => unsubscribe();
+            }, [userId, db, appId, showMessage]);
+
+            const handleSave = async (e) => {
+                e.preventDefault();
+                setLoading(true);
+                try {
+                    await window.firebaseSetDoc(window.firebaseDoc(db, `artifacts/${appId}/users/${userId}/profile/data`), profile);
+                    setEditing(false);
+                    showMessage('Profile updated successfully!', 'success');
+                } catch (error) {
+                    console.error("Error saving profile:", error);
+                    showMessage(`Error saving profile: ${error.message}`, 'error');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleChange = (e) => {
+                const { name, value, type, checked } = e.target;
+                if (name === "interests") {
+                    setProfile(prev => ({ ...prev, interests: value.split(',').map(s => s.trim()).filter(s => s !== '') }));
+                } else if (type === "checkbox") {
+                    setProfile(prev => ({ ...prev, [name]: checked }));
+                } else {
+                    setProfile(prev => ({ ...prev, [name]: value }));
+                }
+            };
+
+            if (loading) {
+                return <div className="text-center py-8">Loading profile...</div>;
+            }
+
+            if (!profile) {
+                return <div className="text-center py-8 text-red-600">Error loading profile or profile not found.</div>;
+            }
+
+            return (
+                <div className="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow-xl">
+                    <h2 className="text-3xl font-bold text-gray-800 mb-6 text-center">Your Profile</h2>
+                    {editing ? (
+                        <form onSubmit={handleSave} className="space-y-4">
+                            <div>
+                                <label className="block text-gray-700 text-sm font-semibold mb-2" htmlFor="name">Name:</label>
+                                <input type="text" id="name" name="name" value={profile.name} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                            </div>
+                            <div>
+                                <label className="block text-gray-700 text-sm font-semibold mb-2" htmlFor="email">Email:</label>
+                                <input type="email" id="email" name="email" value={profile.email} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed" disabled />
+                            </div>
+                            <div>
+                                <label className="block text-gray-700 text-sm font-semibold mb-2" htmlFor="bio">Bio:</label>
+                                <textarea id="bio" name="bio" value={profile.bio} onChange={handleChange} rows="4" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                            </div>
+                            <div>
+                                <label className="block text-gray-700 text-sm font-semibold mb-2" htmlFor="interests">Interests (comma-separated):</label>
+                                <input type="text" id="interests" name="interests" value={profile.interests.join(', ')} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., AI, Machine Learning, Bioinformatics, Web Dev" />
+                            </div>
+                            <div>
+                                <label className="block text-gray-700 text-sm font-semibold mb-2" htmlFor="contact">Contact Info (e.g., LinkedIn, GitHub):</label>
+                                <input type="text" id="contact" name="contact" value={profile.contact} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                            </div>
+                            <div className="flex items-center">
+                                <input type="checkbox" id="isMentor" name="isMentor" checked={profile.isMentor} onChange={handleChange} className="mr-2" />
+                                <label htmlFor="isMentor" className="text-gray-700 text-sm font-semibold">I want to be a mentor</label>
+                            </div>
+                            {profile.isMentor && (
+                                <div>
+                                    <label className="block text-gray-700 text-sm font-semibold mb-2" htmlFor="techLeadRole">Tech Lead Role (if applicable):</label>
+                                    <input type="text" id="techLeadRole" name="techLeadRole" value={profile.techLeadRole} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., AI & ML Lead, Bioinformatics Lead" />
+                                </div>
+                            )}
+                            <div className="flex justify-end space-x-4">
+                                <button type="button" onClick={() => setEditing(false)} className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg transition duration-300 shadow-md">
+                                    Cancel
+                                </button>
+                                <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-md">
+                                    Save Profile
+                                </button>
+                            </div>
+                        </form>
+                    ) : (
+                        <div className="space-y-4 text-gray-700">
+                            <p><strong className="font-semibold">Name:</strong> {profile.name || 'N/A'}</p>
+                            <p><strong className="font-semibold">Email:</strong> {profile.email || 'N/A'}</p>
+                            <p><strong className="font-semibold">Bio:</strong> {profile.bio || 'N/A'}</p>
+                            <p><strong className="font-semibold">Interests:</strong> {profile.interests && profile.interests.length > 0 ? profile.interests.join(', ') : 'N/A'}</p>
+                            <p><strong className="font-semibold">Contact:</strong> {profile.contact || 'N/A'}</p>
+                            <p><strong className="font-semibold">Mentor:</strong> {profile.isMentor ? 'Yes' : 'No'}</p>
+                            {profile.isMentor && <p><strong className="font-semibold">Tech Lead Role:</strong> {profile.techLeadRole || 'N/A'}</p>}
+                            <div className="flex justify-end">
+                                <button onClick={() => setEditing(true)} className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300">
+                                    Edit Profile
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const ProjectsPage = ({ userId, db, appId, showMessage }) => {
+            const [projects, setProjects] = useState([]);
+            const [newProject, setNewProject] = useState({ title: '', description: '', techStack: '', contact: '' });
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                if (!db) {
+                    setLoading(false);
+                    return;
+                }
+
+                const projectsColRef = window.firebaseCollection(db, `artifacts/${appId}/public/data/projects`);
+                const q = window.firebaseQuery(projectsColRef);
+
+                const unsubscribe = window.firebaseOnSnapshot(q, (snapshot) => {
+                    const projectsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    setProjects(projectsData);
+                    setLoading(false);
+                }, (error) => {
+                    console.error("Error fetching projects:", error);
+                    showMessage(`Error loading projects: ${error.message}`, 'error');
+                    setLoading(false);
+                });
+
+                return () => unsubscribe();
+            }, [db, appId, showMessage]);
+
+            const handleAddProject = async (e) => {
+                e.preventDefault();
+                if (!userId) {
+                    showMessage('Please log in to add a project.', 'error');
+                    return;
+                }
+                setLoading(true);
+                try {
+                    await window.firebaseAddDoc(window.firebaseCollection(db, `artifacts/${appId}/public/data/projects`), {
+                        ...newProject,
+                        userId: userId,
+                        createdAt: new Date().toISOString()
+                    });
+                    setNewProject({ title: '', description: '', techStack: '', contact: '' });
+                    showMessage('Project added successfully!', 'success');
+                } catch (error) {
+                    console.error("Error adding project:", error);
+                    showMessage(`Error adding project: ${error.message}`, 'error');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleDeleteProject = async (projectId) => {
+                if (!userId) {
+                    showMessage('Please log in to delete a project.', 'error');
+                    return;
+                }
+                setLoading(true);
+                try {
+                    await window.firebaseDeleteDoc(window.firebaseDoc(db, `artifacts/${appId}/public/data/projects`, projectId));
+                    showMessage('Project deleted successfully!', 'success');
+                } catch (error) {
+                    console.error("Error deleting project:", error);
+                    showMessage(`Error deleting project: ${error.message}`, 'error');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            if (loading) {
+                return <div className="text-center py-8">Loading projects...</div>;
+            }
+
+            return (
+                <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-xl">
+                    <h2 className="text-3xl font-bold text-gray-800 mb-6 text-center">Interdisciplinary Project Hub</h2>
+
+                    <div className="mb-8 p-6 border border-blue-200 rounded-lg bg-blue-50">
+                        <h3 className="text-2xl font-semibold text-blue-800 mb-4">Add a New Project</h3>
+                        <form onSubmit={handleAddProject} className="space-y-4">
+                            <div>
+                                <label className="block text-gray-700 text-sm font-semibold mb-2" htmlFor="project-title">Title:</label>
+                                <input type="text" id="project-title" value={newProject.title} onChange={(e) => setNewProject({ ...newProject, title: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+                            </div>
+                            <div>
+                                <label className="block text-gray-700 text-sm font-semibold mb-2" htmlFor="project-description">Description:</label>
+                                <textarea id="project-description" value={newProject.description} onChange={(e) => setNewProject({ ...newProject, description: e.target.value })} rows="3" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required></textarea>
+                            </div>
+                            <div>
+                                <label className="block text-gray-700 text-sm font-semibold mb-2" htmlFor="project-techstack">Tech Stack / Keywords (comma-separated):</label>
+                                <input type="text" id="project-techstack" value={newProject.techStack} onChange={(e) => setNewProject({ ...newProject, techStack: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., Python, AI, Data Analysis, Bioinformatics" />
+                            </div>
+                            <div>
+                                <label className="block text-gray-700 text-sm font-semibold mb-2" htmlFor="project-contact">Contact (e.g., Email, LinkedIn):</label>
+                                <input type="text" id="project-contact" value={newProject.contact} onChange={(e) => setNewProject({ ...newProject, contact: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                            </div>
+                            <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300">
+                                Add Project
+                            </button>
+                        </form>
+                    </div>
+
+                    <div>
+                        <h3 className="text-2xl font-semibold text-gray-800 mb-4">Available Projects</h3>
+                        {projects.length === 0 ? (
+                            <p className="text-gray-600">No projects available yet. Be the first to add one!</p>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 scroll-container">
+                                {projects.map((project) => (
+                                    <div key={project.id} className="bg-gray-50 p-5 rounded-lg shadow-md border border-gray-200">
+                                        <h4 className="text-xl font-semibold text-gray-900 mb-2">{project.title}</h4>
+                                        <p className="text-gray-700 mb-3">{project.description}</p>
+                                        <p className="text-sm text-gray-600 mb-1"><strong className="font-medium">Tech Stack:</strong> {project.techStack || 'N/A'}</p>
+                                        <p className="text-sm text-gray-600 mb-3"><strong className="font-medium">Contact:</strong> {project.contact || 'N/A'}</p>
+                                        {project.userId === userId && (
+                                            <button onClick={() => handleDeleteProject(project.id)} className="bg-red-500 hover:bg-red-600 text-white text-sm px-3 py-1 rounded-lg shadow-sm transition duration-300">
+                                                Delete My Project
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const MentorsPage = ({ userId, db, appId, showMessage }) => {
+            const [mentors, setMentors] = useState([]);
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                if (!db) {
+                    setLoading(false);
+                    return;
+                }
+
+                const usersColRef = window.firebaseCollection(db, `artifacts/${appId}/users`);
+                const q = window.firebaseQuery(usersColRef);
+
+                const unsubscribe = window.firebaseOnSnapshot(q, async (snapshot) => {
+                    const allUserProfiles = [];
+                    for (const userDoc of snapshot.docs) {
+                        const profileDocRef = window.firebaseDoc(db, `artifacts/${appId}/users/${userDoc.id}/profile/data`);
+                        try {
+                            const profileSnap = await window.firebaseGetDoc(profileDocRef);
+                            if (profileSnap.exists()) {
+                                allUserProfiles.push({ id: userDoc.id, ...profileSnap.data() });
+                            }
+                        } catch (error) {
+                            console.error("Error fetching individual profile:", error);
+                        }
+                    }
+                    const mentorData = allUserProfiles.filter(profile => profile.isMentor);
+                    setMentors(mentorData);
+                    setLoading(false);
+                }, (error) => {
+                    console.error("Error fetching mentors:", error);
+                    showMessage(`Error loading mentors: ${error.message}`, 'error');
+                    setLoading(false);
+                });
+
+                return () => unsubscribe();
+            }, [db, appId, showMessage]);
+
+            const handleConnect = (mentorName) => {
+                showMessage(`You've expressed interest in connecting with ${mentorName}. Please reach out using their contact info! (In a full app, this would trigger a notification/chat)`, 'info');
+            };
+
+            if (loading) {
+                return <div className="text-center py-8">Loading mentors...</div>;
+            }
+
+            return (
+                <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-xl">
+                    <h2 className="text-3xl font-bold text-gray-800 mb-6 text-center">Mentorship Hub</h2>
+                    <p className="text-gray-600 mb-6">Connect with experienced seniors and alumni who are willing to guide you.</p>
+
+                    {mentors.length === 0 ? (
+                        <p className="text-gray-600">No mentors available yet. Encourage more users to mark themselves as mentors in their profile!</p>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 scroll-container">
+                            {mentors.map((mentor) => (
+                                <div key={mentor.id} className="bg-purple-50 p-5 rounded-lg shadow-md border border-purple-200">
+                                    <h4 className="text-xl font-semibold text-purple-900 mb-2">{mentor.name || 'Anonymous Mentor'}</h4>
+                                    {mentor.techLeadRole && <p className="text-sm text-purple-700 mb-2 font-medium">Role: {mentor.techLeadRole}</p>}
+                                    <p className="text-gray-700 text-sm mb-3">{mentor.bio || 'No bio provided.'}</p>
+                                    <p className="text-sm text-gray-600 mb-1"><strong className="font-medium">Interests:</strong> {mentor.interests && mentor.interests.length > 0 ? mentor.interests.join(', ') : 'N/A'}</p>
+                                    <p className="text-sm text-gray-600 mb-3"><strong className="font-medium">Contact:</strong> {mentor.contact || 'N/A'}</p>
+                                    {mentor.id !== userId && (
+                                        <button onClick={() => handleConnect(mentor.name || 'this mentor')} className="bg-purple-600 hover:bg-purple-700 text-white text-sm px-3 py-1 rounded-lg shadow-sm transition duration-300">
+                                            Connect
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const EventsPage = ({ userId, db, appId, showMessage }) => {
+            const [events, setEvents] = useState([]);
+            const [userInterests, setUserInterests] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [recommendationsLoading, setRecommendationsLoading] = useState(false);
+
+            useEffect(() => {
+                if (!userId || !db) return;
+                const profileDocRef = window.firebaseDoc(db, `artifacts/${appId}/users/${userId}/profile/data`);
+                const unsubscribe = window.firebaseOnSnapshot(profileDocRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        setUserInterests(docSnap.data().interests || []);
+                    }
+                }, (error) => {
+                    console.error("Error fetching user interests:", error);
+                });
+                return () => unsubscribe();
+            }, [userId, db, appId]);
+
+            useEffect(() => {
+                setLoading(true);
+                const mockEvents = [
+                    { id: 'e1', title: 'AI in Bioinformatics Workshop', description: 'Explore applications of AI in genomic data analysis.', tags: ['AI', 'Bioinformatics', 'Machine Learning'], date: '2025-08-10', speaker: 'Dr. Anya Sharma' },
+                    { id: 'e2', title: 'Web Development Basics: React & Tailwind', description: 'Hands-on session for beginners building modern web apps.', tags: ['Web Dev', 'React', 'Frontend'], date: '2025-08-15', speaker: 'Prof. Rahul Singh' },
+                    { id: 'e3', title: 'Quantum Computing Fundamentals', description: 'An introduction to the principles of quantum computing.', tags: ['Quantum Computing', 'Physics', 'Advanced Tech'], date: '2025-08-22', speaker: 'Dr. Vikram Kumar' },
+                    { id: 'e4', title: 'Data Science with Python', description: 'Learn data manipulation and visualization with Python.', tags: ['Data Science', 'Python', 'Analysis'], date: '2025-09-01', speaker: 'Ms. Priya Desai' },
+                    { id: 'e5', title: 'Career Paths in Product Based Companies', description: 'Insights from alumni working in leading tech companies.', tags: ['Career', 'Alumni', 'Industry'], date: '2025-09-10', speaker: 'Alumni Panel' },
+                    { id: 'e6', title: 'Introduction to Cloud Computing (GCP)', description: 'Get started with Google Cloud Platform services.', tags: ['Cloud', 'GCP', 'DevOps'], date: '2025-09-18', speaker: 'GDG Cloud Team' },
+                    { id: 'e7', title: 'Research Paper Writing for STEM', description: 'Tips and best practices for writing scientific papers.', tags: ['Research', 'Academia', 'Writing'], date: '2025-09-25', speaker: 'Prof. Elena Petrova' },
+                ];
+                setEvents(mockEvents);
+                setLoading(false);
+            }, []);
+
+            const getRecommendedEvents = useCallback(() => {
+                if (userInterests.length === 0) {
+                    return events;
+                }
+
+                const recommended = events.filter(event =>
+                    event.tags.some(tag => userInterests.includes(tag))
+                );
+                recommended.sort((a, b) => {
+                    const dateA = new Date(a.date);
+                    const dateB = new Date(b.date);
+                    if (dateA - dateB !== 0) return dateA - dateB;
+
+                    const relevanceA = a.tags.filter(tag => userInterests.includes(tag)).length;
+                    const relevanceB = b.tags.filter(tag => userInterests.includes(tag)).length;
+                    return relevanceB - relevanceA;
+                });
+                return recommended;
+            }, [events, userInterests]);
+
+            const handleGetRecommendations = async () => {
+                setRecommendationsLoading(true);
+                showMessage('Generating personalized recommendations using Gemini API (simulated)...', 'info');
+
+                try {
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+                    showMessage('Recommendations updated!', 'success');
+                } catch (error) {
+                    console.error("Gemini API simulation failed:", error);
+                    showMessage('Failed to get recommendations. Using default sorting.', 'error');
+                } finally {
+                    setRecommendationsLoading(false);
+                }
+            };
+
+            const displayedEvents = getRecommendedEvents();
+
+            if (loading) {
+                return <div className="text-center py-8">Loading events...</div>;
+            }
+
+            return (
+                <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-xl">
+                    <h2 className="text-3xl font-bold text-gray-800 mb-6 text-center">Upcoming Events & Workshops</h2>
+                    <p className="text-gray-600 mb-4">
+                        Discover exciting tech events, workshops, and speaker sessions. Your interests: {userInterests.length > 0 ? userInterests.join(', ') : 'None specified (Update your profile!)'}
+                    </p>
+
+                    <div className="flex justify-center mb-6">
+                        <button
+                            onClick={handleGetRecommendations}
+                            disabled={recommendationsLoading}
+                            className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {recommendationsLoading ? 'Generating...' : 'Get Personalized Recommendations'}
+                        </button>
+                    </div>
+
+                    {displayedEvents.length === 0 ? (
+                        <p className="text-gray-600">No events available or matching your interests at the moment.</p>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 scroll-container">
+                            {displayedEvents.map((event) => (
+                                <div key={event.id} className="bg-emerald-50 p-5 rounded-lg shadow-md border border-emerald-200">
+                                    <h4 className="text-xl font-semibold text-emerald-900 mb-2">{event.title}</h4>
+                                    <p className="text-gray-700 mb-3">{event.description}</p>
+                                    <p className="text-sm text-gray-600 mb-1"><strong className="font-medium">Date:</strong> {event.date}</p>
+                                    <p className="text-sm text-gray-600 mb-1"><strong className="font-medium">Speaker:</strong> {event.speaker}</p>
+                                    <p className="text-sm text-gray-600"><strong className="font-medium">Tags:</strong> {event.tags.join(', ')}</p>
+                                    <button className="mt-3 bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-3 py-1 rounded-lg shadow-sm transition duration-300">
+                                        RSVP (Simulated)
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
