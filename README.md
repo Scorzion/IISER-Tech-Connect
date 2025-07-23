@@ -2,27 +2,27 @@
 
 ## 🚀 Empowering the Tech Pulse of IISER Bhopal
 
-**IISER Tech Connect** is a web-based prototype I built to reimagine the Google Developer Group (GDG) on Campus experience at IISER Bhopal. The aim is to foster a vibrant, inclusive, and tightly-knit tech ecosystem that offers real opportunities for learning, mentorship, and industry exposure.
+**IISER Tech Connect** is a web based prototype I built to reimagine the Google Developer Group (GDG) on Campus experience at IISER Bhopal. The aim is to foster a vibrant, inclusive, and tightly knit tech ecosystem that offers real opportunities for learning, mentorship, and industry exposure.
 
 ## 💡 The Problem We're Tackling
 
 Despite the technical potential and research strength at IISER Bhopal, our GDG community has been facing a few pressing challenges:
 
-* **Interdisciplinary Disconnect:** There’s a notable gap when it comes to integrating students from Physics, Chemistry, and Biology into tech-driven efforts—limiting the scope of innovative, cross-domain solutions.
+* **Interdisciplinary Disconnect:** There’s a notable gap when it comes to integrating students from Physics, Chemistry, and Biology into tech driven efforts limiting the scope of innovative, cross domain solutions.
 
-* **Unstructured Growth & Mentorship:** Many juniors struggle with direction—there’s no consistent mentoring or long-term project engagement. Events often happen in isolation without continuity or real-world context.
+* **Unstructured Growth & Mentorship:** Many juniors struggle with direction there’s no consistent mentoring or long term project engagement. Events often happen in isolation without continuity or real world context.
 
 * **Weak Industry & Alumni Pipeline:** There's limited access to alumni in product-based tech roles and a thin connection with industry professionals—both critical for guidance, networking, and internships.
 
 ## 🎯 My Purpose-Built Solution
 
-**IISER Tech Connect** is my answer to these gaps—a centralized, purpose-driven platform to bring coherence, mentorship, and opportunity to our growing tech community.
+**IISER Tech Connect** is my answer to these gaps a centralized, purpose-driven platform to bring coherence, mentorship, and opportunity to our growing tech community.
 
-* **Interdisciplinary Collaboration:** Users can post or join research-oriented tech projects, encouraging scientists and engineers to collaborate and think beyond their silos.
+* **Interdisciplinary Collaboration:** Users can post or join research oriented tech projects, encouraging scientists and engineers to collaborate and think beyond their silos.
 
-* **Structured Mentorship Programs:** A built-in mentorship hub and guided learning paths give juniors the support they need to grow through pet projects and personalized development tracks.
+* **Structured Mentorship Programs:** A built in mentorship hub and guided learning paths give juniors the support they need to grow through pet projects and personalized development tracks.
 
-* **Increased Engagement & Visibility:** A central dashboard for all GDG activities—including personalized event recommendations—boosts community interaction and ownership.
+* **Increased Engagement & Visibility:** A central dashboard for all GDG activities including personalized event recommendations—boosts community interaction and ownership.
 
 * **Strong Industry + Alumni Gateway:** By integrating mentor profiles and professional connections, the platform opens new doors to insights, networking sessions, and career guidance from those already in the field.
 
@@ -46,7 +46,7 @@ I chose tools that scale well and align with Google’s ecosystem:
 
 * **Google IDX:** For modern, cloud-native development.
 
-* **React:** My go-to library for building a dynamic, component-based UI.
+* **React:** My go to library for building a dynamic, component based UI.
 
 * **Tailwind CSS:** For sleek, responsive, utility-first styling.
 
