@@ -52,17 +52,6 @@ I chose tools that scale well and align with Google’s ecosystem:
 
 * **Gemini API (Simulated):** Intended for future use in personalized suggestions and content generation.
 
-## 🚀 Getting Started
-
-This project runs entirely from a single HTML file—simple to deploy, fast to iterate!
-
-### Prerequisites
-
-You'll need:
-
-* A **Google Account**
----
-
 ## 💻 Using the App
 
 Here's a quick walkthrough:
